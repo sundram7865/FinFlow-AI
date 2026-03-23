@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express'
-import { verifyAccessToken } from '../utils/jwt.utils'
-import { sendError } from '../utils/apiResponse'
+import { verifyAccessToken } from '../utils/jwt.utils.js'
+import { sendError } from '../utils/apiResponse.js'
 import { AuthRequest } from '../types'
 
 export const authenticate = (
