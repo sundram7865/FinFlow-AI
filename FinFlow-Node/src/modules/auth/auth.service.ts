@@ -30,12 +30,7 @@ export const registerUser = async (input: RegisterInput) => {
     },
   })
 
-  const tokens = signTokenPair(user.id, user.email, user.role)
-
-  // Store refresh token in DB for revocation support
-  await storeRefreshToken(user.id, tokens.refreshToken)
-
-  return { user, ...tokens }
+  return { user }
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -111,7 +106,9 @@ export const logoutUser = async (refreshToken: string, accessToken: string): Pro
   })
 
   // Blacklist access token in Redis until it expires (~15m)
-  await redis.set(`blacklist:${accessToken}`, '1', 'EX', 60 * 15)
+  if (redis) {
+    await redis.set(`blacklist:${accessToken}`, '1', 'EX', 900)
+  }
 }
 
 // ─── GET PROFILE ──────────────────────────────────────────────────────────────

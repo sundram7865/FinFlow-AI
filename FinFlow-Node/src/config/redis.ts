@@ -1,7 +1,10 @@
 import Redis from 'ioredis'
 
-const redis = new Redis(process.env.REDIS_URL as string, {
-  lazyConnect: true,
+const redisUrl = process.env.REDIS_URL as string
+
+const redis = new Redis(redisUrl, {
+  lazyConnect:    false,   // connect immediately
+  maxRetriesPerRequest: 3,
   retryStrategy: (times) => {
     if (times > 3) {
       console.error('❌ Redis connection failed after 3 retries')
@@ -12,6 +15,6 @@ const redis = new Redis(process.env.REDIS_URL as string, {
 })
 
 redis.on('connect', () => console.log('✅ Redis connected'))
-redis.on('error', (err) => console.error('❌ Redis error:', err))
+redis.on('error',   (err) => console.error('❌ Redis error:', err.message))
 
 export default redis

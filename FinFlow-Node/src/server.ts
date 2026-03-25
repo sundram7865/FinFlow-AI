@@ -4,7 +4,7 @@ import connectMongo from './config/db.mongo'
 import prisma       from './config/db.postgres'
 import redis        from './config/redis'
 import { startCronJobs } from './utils/cron'
-
+import './config/redis'
 const PORT = parseInt(process.env.PORT ?? '3000', 10)
 
 const start = async (): Promise<void> => {
@@ -15,7 +15,7 @@ const start = async (): Promise<void> => {
 
     await connectMongo()
 
-    await redis.connect()
+  
 
     // Start background jobs
     startCronJobs()

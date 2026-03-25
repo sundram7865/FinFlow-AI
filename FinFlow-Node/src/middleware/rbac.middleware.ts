@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express'
-import { sendError } from '../utils/apiResponse.js'
+import { sendError } from '../utils/apiResponse'
 import { AuthRequest, Role } from '../types'
 
 export const authorize = (...roles: Role[]) => {

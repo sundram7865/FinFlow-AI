@@ -1,13 +1,13 @@
 import { Response, NextFunction } from 'express'
-import { verifyAccessToken } from '../utils/jwt.utils.js'
-import { sendError } from '../utils/apiResponse.js'
+import { verifyAccessToken } from '../utils/jwt.utils'
+import { sendError } from '../utils/apiResponse'
 import { AuthRequest } from '../types'
-
-export const authenticate = (
+import redis from '../config/redis'
+export const authenticate = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   const authHeader = req.headers.authorization
 
   if (!authHeader?.startsWith('Bearer ')) {
@@ -20,6 +20,13 @@ export const authenticate = (
   try {
     const payload = verifyAccessToken(token)
     req.user = payload
+    if (redis) {
+      const blacklisted = await redis.get(`blacklist:${token}`)
+      if (blacklisted) {
+        sendError(res, 'Token has been revoked', 401, 'TOKEN_REVOKED')
+        return
+      }
+    }
     next()
   } catch (err: any) {
     if (err.name === 'TokenExpiredError') {

@@ -4,7 +4,7 @@ import { ChatSession } from '../modules/ai/models/ChatSession.model'
 import { AgentMemory } from '../modules/ai/models/AgentMemory.model'
 import { PythonChatPayload } from '../types'
 
-const FASTAPI_URL         = process.env.FASTAPI_URL         as string
+const FASTAPI_URL          = process.env.FASTAPI_URL          as string
 const FASTAPI_INTERNAL_KEY = process.env.FASTAPI_INTERNAL_KEY as string
 
 // ─── FETCH ALL USER CONTEXT FROM BOTH DBS ────────────────────────────────────
@@ -13,7 +13,6 @@ const buildPayload = async (
   userId: string,
   message: string
 ): Promise<PythonChatPayload> => {
-  // PostgreSQL — structured data
   const [transactions, goals] = await Promise.all([
     prisma.transaction.findMany({
       where:   { userId },
@@ -26,7 +25,6 @@ const buildPayload = async (
     }),
   ])
 
-  // MongoDB — AI memory and chat history
   const [chatSession, agentMemory] = await Promise.all([
     ChatSession.findOne({ userId }).lean(),
     AgentMemory.findOne({ userId }).lean(),
@@ -54,9 +52,9 @@ export const streamAgentResponse = async (
   const pythonRes = await fetch(`${FASTAPI_URL}/agent/chat`, {
     method:  'POST',
     headers: {
-      'Content-Type':    'application/json',
-      'X-User-Id':       userId,
-      'X-Internal-Key':  FASTAPI_INTERNAL_KEY,
+      'Content-Type':   'application/json',
+      'X-User-Id':      userId,
+      'X-Internal-Key': FASTAPI_INTERNAL_KEY,
     },
     body: JSON.stringify(payload),
   })
@@ -65,15 +63,13 @@ export const streamAgentResponse = async (
     throw new Error(`FastAPI error: ${pythonRes.status}`)
   }
 
-  // Set SSE headers
   res.setHeader('Content-Type',  'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection',    'keep-alive')
   res.flushHeaders()
 
-  // Collect full response while streaming
   let fullResponse = ''
-  const reader = pythonRes.body!.getReader()
+  const reader  = pythonRes.body!.getReader()
   const decoder = new TextDecoder()
 
   while (true) {
@@ -86,7 +82,6 @@ export const streamAgentResponse = async (
 
   res.end()
 
-  // Save conversation to MongoDB after streaming finishes
   await saveChatMessages(userId, message, fullResponse)
 }
 
@@ -113,7 +108,7 @@ export const saveChatMessages = async (
   )
 }
 
-// ─── CALL PYTHON FOR PDF PARSING (non-streaming) ──────────────────────────────
+// ─── CALL PYTHON FOR PDF PARSING (non-streaming) ─────────────────────────────
 
 export const parsePdfStatement = async (
   userId: string,
@@ -131,7 +126,7 @@ export const parsePdfStatement = async (
   })
 
   if (!res.ok) throw new Error(`PDF parse failed: ${res.status}`)
-  return res.json()
+  return res.json() as Promise<{ transactions: object[] }>
 }
 
 // ─── CALL PYTHON TO GENERATE REPORT (non-streaming) ──────────────────────────
@@ -162,5 +157,5 @@ export const generateMonthlyReport = async (
   })
 
   if (!res.ok) throw new Error(`Report generation failed: ${res.status}`)
-  return res.json()
+  return res.json() as Promise<{ fileUrl: string; summary: string }>
 }

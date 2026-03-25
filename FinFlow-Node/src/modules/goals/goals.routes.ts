@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import * as goalsController from './goals.controllers.js'
+import * as goalsController from './goals.controllers'
 import { authenticate } from '../../middleware/auth.middleware'
 
 const router = Router()
