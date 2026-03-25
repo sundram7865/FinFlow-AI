@@ -1,3 +1,11 @@
 node_modules
 dist
 .env
+venv
+venv/
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+.DS_Store
