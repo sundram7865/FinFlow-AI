@@ -26,49 +26,49 @@ Given the user message, return a JSON object with EXACTLY these 4 fields:
 
 4. "filters": object for structured filtering
    - If user mentions a date or time period, extract:
-     {{
+     {
        "start_date": "YYYY-MM-DD",
        "end_date": "YYYY-MM-DD"
-     }}
+     }
 
    - If NO time/date is mentioned:
-     return an empty object: {{}}
+     return an empty object: {}
 
 IMPORTANT RULES:
 - Always return valid JSON
 - Do NOT include markdown or explanation
-- "filters" must ALWAYS be present (even if empty {{}})
+- "filters" must ALWAYS be present (even if empty {})
 
 ---
 
 Examples:
 
 User: "Show my March 2026 transactions"
-{{
+{
   "intent": "ANALYSIS",
   "rag_query": "transactions debit credit march 2026",
   "next_node": "analyst",
-  "filters": {{
+  "filters": {
     "start_date": "2026-03-01",
     "end_date": "2026-03-31"
-  }}
-}}
+  }
+}
 
 User: "How much did I spend on food?"
-{{
+{
   "intent": "ANALYSIS",
   "rag_query": "food dining restaurant zomato swiggy debit",
   "next_node": "analyst",
-  "filters": {{}}
-}}
+  "filters": {}
+}
 
 User: "Should I buy a phone?"
-{{
+{
   "intent": "ADVICE",
   "rag_query": "monthly income savings balance expenses",
   "next_node": "advisor",
-  "filters": {{}}
-}}
+  "filters": {}
+}
 
 User message: {message}
 

@@ -11,9 +11,9 @@ def get_embedding_model() -> SentenceTransformer:
 
 def embed_text(text: str) -> list[float]:
     model = get_embedding_model()
-    return model.encode(text).tolist()
+    return model.encode(text, normalize_embeddings=True).tolist()
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     model = get_embedding_model()
-    return model.encode(texts).tolist()
+    return model.encode(texts, normalize_embeddings=True).tolist()

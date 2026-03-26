@@ -4,6 +4,9 @@ from app.agents.tools.rag_tools import search_pdf_chunks
 from app.core.logging import logger
 
 
+MAX_CONTEXT_CHUNKS = 40   # 🚨 VERY IMPORTANT (LLM safe)
+
+
 def _default_last_30_days():
     today = datetime.utcnow().date()
     start = today - timedelta(days=30)
@@ -13,37 +16,51 @@ def _default_last_30_days():
     }
 
 
+def _rank_chunks(chunks: list[dict]) -> list[dict]:
+    """
+    Hybrid ranking:
+    score = semantic + amount_boost + recency_boost
+    """
+
+    now = datetime.utcnow()
+
+    for c in chunks:
+        sim = c.get("similarity", 0)
+        amt = float(c.get("amount", 0))
+
+        # ── amount boost ───────────────────────────
+        amount_score = min(amt / 10000, 1.5)  # normalize
+
+        # ── recency boost ─────────────────────────
+        try:
+            date = datetime.fromisoformat(c.get("date"))
+            days_old = (now - date).days
+            recency_score = max(0, 1 - (days_old / 30))
+        except:
+            recency_score = 0
+
+        # ── final score ───────────────────────────
+        c["final_score"] = sim + (0.5 * amount_score) + (0.3 * recency_score)
+
+    return sorted(chunks, key=lambda x: x["final_score"], reverse=True)
+
+
 async def rag_retriever_node(state: FinFlowState) -> dict:
-    """
-    Hybrid RAG:
-    1. Apply Mongo filters (date, etc.)
-    2. Then apply embedding ranking
-    """
 
     user_id   = state.get("user_id", "")
     rag_query = state.get("rag_query", "")
-    intent    = state.get("intent", "GENERAL")
     filters   = state.get("filters", {}) or {}
 
-    logger.info(f"[RAG Retriever] ── START ── user_id={user_id}")
-    logger.info(f"[RAG Retriever] intent={intent}")
-    logger.info(f"[RAG Retriever] rag_query='{rag_query[:100]}'")
-    logger.info(f"[RAG Retriever] filters={filters}")
+    logger.info(f"[RAG] ── START ── user_id={user_id}")
 
-    if not user_id:
-        logger.warning("[RAG Retriever] No user_id — skipping")
+    if not user_id or not rag_query:
+        logger.warning("[RAG] Missing user_id or query")
         return {"transactions": []}
 
-    if not rag_query:
-        logger.warning("[RAG Retriever] No rag_query — skipping")
-        return {"transactions": []}
-
-    # ── fallback filters ─────────────────────────────
+    # ── fallback filters ─────────────────────────
     if not filters:
-        logger.info("[RAG Retriever] No filters → using last 30 days")
         filters = _default_last_30_days()
 
-    # ── build mongo filter ──────────────────────────
     mongo_filter = {"userId": user_id}
 
     if filters.get("start_date") and filters.get("end_date"):
@@ -52,30 +69,38 @@ async def rag_retriever_node(state: FinFlowState) -> dict:
             "$lte": filters["end_date"],
         }
 
-    logger.info(f"[RAG Retriever] Mongo filter: {mongo_filter}")
+    logger.info(f"[RAG] Mongo filter: {mongo_filter}")
 
-    # ── hybrid search ───────────────────────────────
     try:
+        # 🚨 fetch more, rank later
         chunks = await search_pdf_chunks(
             user_id=user_id,
             query=rag_query,
-            top_k=200,
-            mongo_filter=mongo_filter,   # ✅ NEW
+            top_k=300,   # fetch bigger pool
+            mongo_filter=mongo_filter,
         )
     except Exception as e:
-        logger.error(f"[RAG Retriever] Search failed: {e}")
+        logger.error(f"[RAG] Search failed: {e}")
         return {"transactions": []}
 
-    # ── logging ─────────────────────────────────────
-    if chunks:
-        logger.info(f"[RAG Retriever] Found {len(chunks)} chunks")
-        for i, chunk in enumerate(chunks[:3]):
-            score = round(chunk.get("similarity", 0), 4)
-            preview = str(chunk.get("content", ""))[:80]
-            logger.info(f"[RAG Retriever] chunk[{i}] score={score} | '{preview}'")
-    else:
-        logger.warning("[RAG Retriever] No chunks found")
+    if not chunks:
+        logger.warning("[RAG] No chunks found")
+        return {"transactions": []}
 
-    logger.info(f"[RAG Retriever] ── DONE ── stored {len(chunks)} chunks")
+    # ── 🔥 HYBRID RANKING ────────────────────────
+    ranked = _rank_chunks(chunks)
 
-    return {"transactions": chunks}
+    # ── 🚨 trim for LLM safety ───────────────────
+    final_chunks = ranked[:MAX_CONTEXT_CHUNKS]
+
+    logger.info(f"[RAG] Retrieved={len(chunks)} | After ranking={len(final_chunks)}")
+
+    for i, c in enumerate(final_chunks[:5]):
+        logger.info(
+            f"[RAG] #{i} score={round(c['final_score'],3)} "
+            f"| ₹{c.get('amount')} | {c.get('category')} | {c.get('date')}"
+        )
+
+    logger.info("[RAG] ── DONE ──")
+
+    return {"transactions": final_chunks}
