@@ -3,6 +3,7 @@ import prisma from '../config/db.postgres'
 import { ChatSession } from '../modules/ai/models/ChatSession.model'
 import { AgentMemory } from '../modules/ai/models/AgentMemory.model'
 import { PythonChatPayload } from '../types'
+import { Anomaly } from '../modules/ai/models/Anomaly.model'
 
 const FASTAPI_URL          = process.env.FASTAPI_URL          as string
 const FASTAPI_INTERNAL_KEY = process.env.FASTAPI_INTERNAL_KEY as string
@@ -73,7 +74,60 @@ export const streamAgentResponse = async (
   }
 
   res.end()
+  const metaIndex = fullResponse.lastIndexOf('[META]')
 
+  if (metaIndex !== -1) {
+    let metaStr = fullResponse.substring(metaIndex + 6).trim()
+
+  // Try to extract valid JSON safely
+    try {
+    // This ensures we only take the JSON part
+        const firstBrace = metaStr.indexOf('{')
+        const lastBrace = metaStr.lastIndexOf('}')
+
+      if (firstBrace !== -1 && lastBrace !== -1) {
+      const cleanJson = metaStr.substring(firstBrace, lastBrace + 1)
+
+      const data = JSON.parse(cleanJson)
+      if (data.new_memories?.length) {
+  await AgentMemory.findOneAndUpdate(
+    { userId },
+    {
+      $push: {
+        memories: {
+          $each: data.new_memories.map((m: any) => ({
+            summary: m.summary,
+            type: m.type,
+            createdAt: new Date(),
+          })),
+        },
+      },
+    },
+    { upsert: true, new: true }
+  )
+   console.log("✅ new_memories:", data.new_memories)
+}
+    if (data.anomalies?.length) {
+  console.log("⚠️ anomalies detected:", data.anomalies)
+
+  const anomalyDocs = data.anomalies.map((a: any) => ({
+    userId,
+    description: a.description,
+    severity: a.severity,
+    detectedAt: new Date(),
+    seen: false,
+  }))
+
+  await Anomaly.insertMany(anomalyDocs)
+
+  console.log("✅ anomalies saved to DB")
+}
+     }
+  } catch (err) {
+    console.error("❌ JSON still not ready")
+  }
+}
+   
   await saveChatMessages(userId, message, fullResponse)
 }
 
