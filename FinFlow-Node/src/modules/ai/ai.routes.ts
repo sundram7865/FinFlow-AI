@@ -23,10 +23,10 @@ router.post('/chat', async (req: AuthRequest, res: Response, next: NextFunction)
   try {
     const { body } = chatSchema.parse({ body: req.body })
     const userId   = req.user!.userId
-
+    console.log("Received message from user", userId, ":", body.message)
     // Check Redis cache
     const cacheKey = `chat:${userId}:${body.message}`
-
+    
     if (redis) {
       const cached = await redis.get(cacheKey)
       if (cached) {
@@ -36,7 +36,7 @@ router.post('/chat', async (req: AuthRequest, res: Response, next: NextFunction)
         return
       }
     }
-
+    console.log("No cache hit for user", userId, "message:", body.message)
     // Collect full response while streaming so we can cache it
     let fullResponse = ''
 
@@ -45,9 +45,9 @@ router.post('/chat', async (req: AuthRequest, res: Response, next: NextFunction)
       fullResponse += chunk.toString()
       return originalWrite(chunk)
     }
-
+    console.log("Calling Python agent for user", userId)
     await streamAgentResponse(userId, body.message, res)
-
+    console.log("Finished streaming for user", userId)
     // Fix 3 — save response to cache after streaming finishes
     if (redis && fullResponse) {
       await redis.set(cacheKey, fullResponse, 'EX', 300) // 5 min

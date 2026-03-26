@@ -16,9 +16,9 @@ class MemoryEntry(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message:     str
-    userId:      str
-    transactions: list[dict[str, Any]] = []
+    message:      str
+    userId:       str
+    # transactions removed — Python fetches these via RAG from MongoDB pdfchunks
     goals:        list[dict[str, Any]] = []
     chat_history: list[dict[str, Any]] = []
     memory:       list[dict[str, Any]] = []

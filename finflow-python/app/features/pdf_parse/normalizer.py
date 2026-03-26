@@ -12,7 +12,7 @@ async def extract_transactions_from_text(text: str) -> list[dict]:
     """
     llm = get_llm()
 
-    chunks     = [text[i:i+3000] for i in range(0, min(len(text), 12000), 3000)]
+    chunks = [text[i:i+3000] for i in range(0, len(text), 3000)]
     all_txns: list[dict] = []
 
     for chunk in chunks:

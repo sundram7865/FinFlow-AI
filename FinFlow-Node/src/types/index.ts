@@ -57,7 +57,6 @@ export interface AgentMemory {
 export interface PythonChatPayload {
   message: string
   userId: string
-  transactions: object[]
   goals: object[]
   chat_history: ChatMessage[]
   memory: AgentMemory[]

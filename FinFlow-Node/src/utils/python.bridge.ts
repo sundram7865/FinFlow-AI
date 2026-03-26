@@ -13,17 +13,10 @@ const buildPayload = async (
   userId: string,
   message: string
 ): Promise<PythonChatPayload> => {
-  const [transactions, goals] = await Promise.all([
-    prisma.transaction.findMany({
-      where:   { userId },
-      orderBy: { date: 'desc' },
-      take:    50,
-    }),
-    prisma.goal.findMany({
-      where:   { userId },
-      include: { milestones: true },
-    }),
-  ])
+  const goals = await prisma.goal.findMany({
+  where:   { userId },
+  include: { milestones: true },
+})
 
   const [chatSession, agentMemory] = await Promise.all([
     ChatSession.findOne({ userId }).lean(),
@@ -33,7 +26,6 @@ const buildPayload = async (
   return {
     message,
     userId,
-    transactions,
     goals,
     chat_history: chatSession?.messages ?? [],
     memory:       (agentMemory as any)?.memories ?? [],

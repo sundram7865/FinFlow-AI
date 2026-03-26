@@ -1,10 +1,9 @@
 from app.features.pdf_parse.schemas    import ParseRequest, ParseResponse
 from app.features.pdf_parse.extractor  import download_and_extract
 from app.features.pdf_parse.normalizer import extract_transactions_from_text
-from app.agents.tools.rag_tools        import save_pdf_chunks
+from app.agents.tools.rag_tools        import save_pdf_chunks,delete_pdf_chunks
 from app.shared.embeddings             import embed_texts
 from app.core.logging                  import logger
-
 
 async def parse_statement(request: ParseRequest) -> ParseResponse:
     """
@@ -20,18 +19,23 @@ async def parse_statement(request: ParseRequest) -> ParseResponse:
 
     # Build chunks for RAG
     chunks = []
-    for i, page_text in enumerate(pages):
-        if not page_text.strip():
-            continue
-        embedding = embed_texts([page_text])[0]
-        chunks.append({
-            "userId":    request.userId,
-            "uploadId":  request.uploadId,
-            "content":   page_text,
-            "embedding": embedding,
-            "pageNum":   i + 1,
-        })
 
+    for txn in transactions:
+        content = f"{txn.get('type')} of ₹{txn.get('amount')} at {txn.get('description', '')} on {txn.get('date')}"
+
+        embedding = embed_texts([content])[0]
+
+        chunks.append({
+        "userId":    request.userId,
+        "uploadId":  request.uploadId,
+        "content":   content,
+        "embedding": embedding,
+        "amount":    txn.get("amount"),
+        "type":      txn.get("type"),
+        "category":  txn.get("category"),
+        "date":      txn.get("date"),
+    })
+    await delete_pdf_chunks(request.userId, request.uploadId)
     await save_pdf_chunks(request.userId, request.uploadId, chunks)
     logger.info(f"Saved {len(chunks)} PDF chunks to MongoDB for user {request.userId}")
 

@@ -20,7 +20,12 @@ export const uploadStatement = async (
   // Upload to cloudinary
   const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: `finflow/${userId}`, resource_type: 'raw', format: 'pdf' },
+      { 
+    folder: `finflow/${userId}`,
+    resource_type: 'raw',
+    type: 'upload',
+    access_mode: 'public'
+  },
       (err, res) => {
         if (err || !res) reject(err ?? new Error('Upload failed'))
         else resolve(res as { secure_url: string })
