@@ -1,6 +1,6 @@
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Transaction } from '@/types/transaction.types'
+import type { Transaction } from '@/types/transaction.types'
 import { CATEGORY_COLORS } from '@/utils/constants'
 import { formatCurrency, formatShortDate } from '@/utils/format'
 import { cn } from '@/utils/cn'
