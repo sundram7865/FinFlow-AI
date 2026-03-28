@@ -1,6 +1,6 @@
 import { Trash2, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Transaction } from '@/types/transaction.types'
+import type { Transaction } from '@/types/transaction.types'
 import { formatCurrency, formatDate } from '@/utils/format'
 import { useDeleteTransaction } from '@/hooks/useTransactions'
 import { cn } from '@/utils/cn'
