@@ -1,6 +1,6 @@
 import apiClient from './api.client'
-import { Upload } from '@/types/upload.types'
-import { ApiResponse } from '@/types/api.types'
+import type{ Upload } from '@/types/upload.types'
+import type{ ApiResponse } from '@/types/api.types'
 
 export const uploadService = {
   upload: (file: File) => {
