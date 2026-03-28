@@ -4,10 +4,10 @@ import { chatService } from '@/services/chat.service'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import ChatWindow  from '@/components/chat/ChatWindow'
 import ChatInput   from '@/components/chat/ChatInput'
-import { Anomaly, AgentMemory, ChatMessage } from '@/types/chat.types'
+import type { Anomaly, AgentMemory, ChatMessage } from '@/types/chat.types'
 
 export default function ChatPage() {
-  const { addMessage, updateLastMessage, setStreaming, isStreaming, setAnomalies, addMemories, messages } = useChatStore()
+  const { addMessage, updateLastMessage, setStreaming, isStreaming, setAnomalies, addMemories } = useChatStore()
 
   useEffect(() => {
     chatService.getHistory().then(res => {
