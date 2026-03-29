@@ -45,7 +45,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   agentUsed?: string
-  timestamp: Date
+  timestamp: string
 }
 
 export interface AgentMemory {
@@ -56,6 +56,7 @@ export interface AgentMemory {
 
 export interface PythonChatPayload {
   message: string
+  chatId: string
   userId: string
   goals: object[]
   chat_history: ChatMessage[]
