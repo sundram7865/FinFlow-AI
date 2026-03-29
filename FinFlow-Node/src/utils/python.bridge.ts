@@ -1,46 +1,76 @@
 import { Response } from 'express'
+import { v4 as uuidv4 } from 'uuid'
 import prisma from '../config/db.postgres'
-import { ChatSession } from '../modules/ai/models/ChatSession.model'
+import { Chat }        from '../modules/ai/models/Chat.model'
+import { Message }     from '../modules/ai/models/Message.model'
 import { AgentMemory } from '../modules/ai/models/AgentMemory.model'
+import { Anomaly }     from '../modules/ai/models/Anomaly.model'
 import { PythonChatPayload } from '../types'
-import { Anomaly } from '../modules/ai/models/Anomaly.model'
 
 const FASTAPI_URL          = process.env.FASTAPI_URL          as string
 const FASTAPI_INTERNAL_KEY = process.env.FASTAPI_INTERNAL_KEY as string
 
-// ─── FETCH ALL USER CONTEXT FROM BOTH DBS ────────────────────────────────────
+// ─── BUILD PAYLOAD ────────────────────────────────────────────────────────────
 
 const buildPayload = async (
   userId: string,
+  chatId: string,
   message: string
 ): Promise<PythonChatPayload> => {
-  const goals = await prisma.goal.findMany({
-  where:   { userId },
-  include: { milestones: true },
-})
-
-  const [chatSession, agentMemory] = await Promise.all([
-    ChatSession.findOne({ userId }).lean(),
+  const [goals, recentMessages, agentMemory] = await Promise.all([
+    prisma.goal.findMany({ where: { userId }, include: { milestones: true } }),
+    // Fetch last 10 messages for this specific chat — context windowing
+    Message.find({ chatId })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean()
+      .then(msgs => msgs.reverse()),
     AgentMemory.findOne({ userId }).lean(),
   ])
 
   return {
     message,
     userId,
+    chatId,
     goals,
-    chat_history: chatSession?.messages ?? [],
-    memory:       (agentMemory as any)?.memories ?? [],
+    chat_history: recentMessages.map(m => ({
+      role:      m.role,
+      content:   m.content,
+      agentUsed: m.agentUsed,
+      timestamp: m.timestamp.toISOString(),
+    })),
+    memory: (agentMemory as any)?.memories ?? [],
   }
 }
 
-// ─── CALL PYTHON AND STREAM RESPONSE BACK ────────────────────────────────────
+// ─── STREAM AGENT RESPONSE ────────────────────────────────────────────────────
 
 export const streamAgentResponse = async (
-  userId: string,
+  userId:  string,
+  chatId:  string,
   message: string,
-  res: Response
+  res:     Response
 ): Promise<void> => {
-  const payload = await buildPayload(userId, message)
+  // Save user message first
+  await Message.create({
+    messageId: uuidv4(),
+    chatId,
+    userId,
+    role:    'user',
+    content: message,
+    timestamp: new Date(),
+  })
+
+  // Update chat title from first message
+  const msgCount = await Message.countDocuments({ chatId })
+  if (msgCount === 1) {
+    await Chat.findOneAndUpdate(
+      { chatId },
+      { title: message.slice(0, 50) }
+    )
+  }
+
+  const payload = await buildPayload(userId, chatId, message)
 
   const pythonRes = await fetch(`${FASTAPI_URL}/agent/chat`, {
     method:  'POST',
@@ -52,9 +82,7 @@ export const streamAgentResponse = async (
     body: JSON.stringify(payload),
   })
 
-  if (!pythonRes.ok) {
-    throw new Error(`FastAPI error: ${pythonRes.status}`)
-  }
+  if (!pythonRes.ok) throw new Error(`FastAPI error: ${pythonRes.status}`)
 
   res.setHeader('Content-Type',  'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -74,134 +102,43 @@ export const streamAgentResponse = async (
   }
 
   res.end()
+
+  // Parse META and save AI response
   const metaIndex = fullResponse.lastIndexOf('[META]')
+  let   aiContent = fullResponse
 
   if (metaIndex !== -1) {
-    let metaStr = fullResponse.substring(metaIndex + 6).trim()
-
-  // Try to extract valid JSON safely
+    aiContent = fullResponse.substring(0, metaIndex)
     try {
-    // This ensures we only take the JSON part
-        const firstBrace = metaStr.indexOf('{')
-        const lastBrace = metaStr.lastIndexOf('}')
+      const metaStr  = fullResponse.substring(metaIndex + 6)
+      const jsonStr  = metaStr.substring(metaStr.indexOf('{'), metaStr.lastIndexOf('}') + 1)
+      const meta     = JSON.parse(jsonStr)
 
-      if (firstBrace !== -1 && lastBrace !== -1) {
-      const cleanJson = metaStr.substring(firstBrace, lastBrace + 1)
+      if (meta.new_memories?.length) {
+        await AgentMemory.findOneAndUpdate(
+          { userId },
+          { $push: { memories: { $each: meta.new_memories.map((m: any) => ({ ...m, createdAt: new Date() })) } } },
+          { upsert: true }
+        )
+      }
 
-      const data = JSON.parse(cleanJson)
-      if (data.new_memories?.length) {
-  await AgentMemory.findOneAndUpdate(
-    { userId },
-    {
-      $push: {
-        memories: {
-          $each: data.new_memories.map((m: any) => ({
-            summary: m.summary,
-            type: m.type,
-            createdAt: new Date(),
-          })),
-        },
-      },
-    },
-    { upsert: true, new: true }
-  )
-   console.log("✅ new_memories:", data.new_memories)
-}
-    if (data.anomalies?.length) {
-  console.log("⚠️ anomalies detected:", data.anomalies)
-
-  const anomalyDocs = data.anomalies.map((a: any) => ({
-    userId,
-    description: a.description,
-    severity: a.severity,
-    detectedAt: new Date(),
-    seen: false,
-  }))
-
-  await Anomaly.insertMany(anomalyDocs)
-
-  console.log("✅ anomalies saved to DB")
-}
-     }
-  } catch (err) {
-    console.error("❌ JSON still not ready")
+      if (meta.anomalies?.length) {
+        await Anomaly.insertMany(
+          meta.anomalies.map((a: any) => ({ userId, ...a, detectedAt: new Date(), seen: false }))
+        )
+      }
+    } catch (e) {
+      console.error('META parse error:', e)
+    }
   }
-}
-   
-  await saveChatMessages(userId, message, fullResponse)
-}
 
-// ─── SAVE MESSAGES TO MONGO ───────────────────────────────────────────────────
-
-export const saveChatMessages = async (
-  userId: string,
-  userMessage: string,
-  aiMessage: string
-): Promise<void> => {
-  await ChatSession.findOneAndUpdate(
-    { userId },
-    {
-      $push: {
-        messages: {
-          $each: [
-            { role: 'user',      content: userMessage, timestamp: new Date() },
-            { role: 'assistant', content: aiMessage,   timestamp: new Date() },
-          ],
-        },
-      },
-    },
-    { upsert: true, new: true }
-  )
-}
-
-// ─── CALL PYTHON FOR PDF PARSING (non-streaming) ─────────────────────────────
-
-export const parsePdfStatement = async (
-  userId: string,
-  fileUrl: string,
-  uploadId: string
-): Promise<{ transactions: object[] }> => {
-  const res = await fetch(`${FASTAPI_URL}/parse/statement`, {
-    method:  'POST',
-    headers: {
-      'Content-Type':   'application/json',
-      'X-User-Id':      userId,
-      'X-Internal-Key': FASTAPI_INTERNAL_KEY,
-    },
-    body: JSON.stringify({ userId, fileUrl, uploadId }),
+  // Save AI response as separate message
+  await Message.create({
+    messageId: uuidv4(),
+    chatId,
+    userId,
+    role:      'assistant',
+    content:   aiContent.replace(/^data: /gm, '').replace('[DONE]', '').trim(),
+    timestamp: new Date(),
   })
-
-  if (!res.ok) throw new Error(`PDF parse failed: ${res.status}`)
-  return res.json() as Promise<{ transactions: object[] }>
-}
-
-// ─── CALL PYTHON TO GENERATE REPORT (non-streaming) ──────────────────────────
-
-export const generateMonthlyReport = async (
-  userId: string,
-  month: number,
-  year: number
-): Promise<{ fileUrl: string; summary: string }> => {
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      userId,
-      date: {
-        gte: new Date(year, month - 1, 1),
-        lt:  new Date(year, month, 1),
-      },
-    },
-  })
-
-  const res = await fetch(`${FASTAPI_URL}/report/generate`, {
-    method:  'POST',
-    headers: {
-      'Content-Type':   'application/json',
-      'X-User-Id':      userId,
-      'X-Internal-Key': FASTAPI_INTERNAL_KEY,
-    },
-    body: JSON.stringify({ userId, month, year, transactions }),
-  })
-
-  if (!res.ok) throw new Error(`Report generation failed: ${res.status}`)
-  return res.json() as Promise<{ fileUrl: string; summary: string }>
 }
