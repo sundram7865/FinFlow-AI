@@ -7,7 +7,7 @@ interface Props { milestones: Milestone[] }
 export default function MilestoneTimeline({ milestones }: Props) {
   return (
     <div className="space-y-3 mt-4">
-      {milestones.slice(0, 8).map(m => (
+      {milestones.map(m => (
         <div key={m.id} className="flex items-center gap-3 text-sm">
           {m.achieved
             ? <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />

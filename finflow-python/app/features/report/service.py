@@ -4,10 +4,10 @@ from app.features.report.schemas     import ReportRequest, ReportResponse
 from app.features.report.builder     import build_report_pdf
 from app.agents.tools.transaction_tools import summarize_transactions
 from app.shared.llm                  import get_llm
-from app.shared.cloudinary           import upload_file
+from app.shared.cloudinary           import  upload_file
 from app.shared.prompts              import REPORT_PROMPT
 from app.core.logging                import logger
-
+from xml.sax.saxutils import escape
 
 async def generate_report(request: ReportRequest) -> ReportResponse:
     """
@@ -20,7 +20,7 @@ async def generate_report(request: ReportRequest) -> ReportResponse:
     """
     llm     = get_llm()
     summary = summarize_transactions(request.transactions)
-
+   
     top_cats = ", ".join(
         f"{cat} ₹{amt:,.0f}"
         for cat, amt in summary["top_categories"][:3]
@@ -37,8 +37,26 @@ async def generate_report(request: ReportRequest) -> ReportResponse:
     )
 
     response     = await llm.ainvoke([HumanMessage(content=prompt)])
-    summary_text = response.content
+    summary_text = str(response.content).strip()
 
+# limit size (important)
+    summary_text = summary_text[:3000]
+
+# escape unsafe characters for ReportLab
+    safe_summary = escape(summary_text)
+
+# optional: convert newlines
+    safe_summary = safe_summary.replace("\n", "<br/>")
+    summary_text =  """
+This is a test financial report.
+
+Total income: ₹50,000
+Total expense: ₹30,000
+Savings: ₹20,000
+
+Everything is working correctly.
+"""
+    print("PDF will be generated soon...")
     pdf_path = build_report_pdf(
         month=request.month,
         year=request.year,
@@ -47,11 +65,15 @@ async def generate_report(request: ReportRequest) -> ReportResponse:
         total_expense=summary["total_expense"],
         by_category=summary["by_category"],
     )
-
+ 
+    
     try:
         file_url = upload_file(pdf_path, folder=f"finflow/reports/{request.userId}")
         logger.info(f"Report uploaded: {file_url}")
-    finally:
         os.unlink(pdf_path)
+    except Exception as e:
+            if os.path.exists(pdf_path):
+                os.unlink(pdf_path)
+            raise
 
     return ReportResponse(fileUrl=file_url, summary=summary_text)

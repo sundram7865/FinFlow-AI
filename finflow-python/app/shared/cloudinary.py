@@ -16,6 +16,8 @@ def upload_file(file_path: str, folder: str = "finflow/reports") -> str:
     result = cloudinary.uploader.upload(
         file_path,
         folder=folder,
-        resource_type="raw",
+        resource_type="raw",   # ✅ let Cloudinary detect it as PDF
+        format="pdf",           # ✅ explicitly keep .pdf extension in URL
+        access_mode="public",   # ✅ ensure public access
     )
-    return result["secure_url"]
+    return result["secure_url"]  # ✅ no .replace() needed — URL is already correct

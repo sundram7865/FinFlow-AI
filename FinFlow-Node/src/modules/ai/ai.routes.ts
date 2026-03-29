@@ -87,6 +87,7 @@ router.delete('/history', async (req: AuthRequest, res: Response, next: NextFunc
 
 router.get('/anomalies', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log("fetching anomalies for userId", req.user!.userId)
     const anomalies = await Anomaly.find({ userId: req.user!.userId })
       .sort({ detectedAt: -1 })
       .limit(20)
