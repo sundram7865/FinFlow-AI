@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
-
+import numpy as np
 
 def summarize_transactions(transactions: list) -> dict:
     """Aggregates transactions by category and type."""
@@ -59,26 +59,65 @@ def calculate_averages(transactions: list) -> dict:
     return {"avg_income": avg_income, "avg_expense": avg_expense}
 
 
-def detect_anomalies(transactions: list) -> list:
-    """Detects spending anomalies — 3x category average = anomaly."""
-    category_amounts: dict[str, list[float]] = defaultdict(list)
+def detect_anomalies(transactions):
+    expenses = [
+        float(t.get("amount", 0))
+        for t in transactions
+        if t.get("type") != "CREDIT"
+    ]
 
-    for t in transactions:
-        if t.get("type") == "DEBIT":
-            category = t.get("category", "other")
-            category_amounts[category].append(float(t.get("amount", 0)))
+    if not expenses:
+        return []
+
+    mean = np.mean(expenses)
+    std  = np.std(expenses) or 1
 
     anomalies = []
-    for category, amounts in category_amounts.items():
-        if len(amounts) < 3:
+
+    for t in transactions:
+        if t.get("type") == "CREDIT":
             continue
-        avg    = sum(amounts[:-1]) / len(amounts[:-1])
-        latest = amounts[-1]
-        if avg > 0 and latest > avg * 3:
+
+        t_amount = float(t.get("amount", 0))
+        category = t.get("category", "Unknown")
+
+        z = (t_amount - mean) / std
+
+        if z > 2:
+            if z > 3:
+                severity = "high"
+            elif z > 2.5:
+                severity = "medium"
+            else:
+                severity = "low"
+
+            percentile = (
+                sum(a < t_amount for a in expenses) / len(expenses) * 100
+            )
+
+            if percentile >= 95:
+                rank = "top 5%"
+            elif percentile >= 90:
+                rank = "top 10%"
+            else:
+                rank = "unusual"
+
+            ratio = (t_amount / mean) if mean > 0 else 0
+
+            description = (
+                f"You spent ₹{t_amount} on {category}, "
+                f"which is {ratio:.1f}× your average spending. "
+                f"This falls in the {rank} of your past transactions."
+            )
+
             anomalies.append({
-                "description": f"{category} spend of ₹{latest:,.0f} is {latest/avg:.1f}x above average",
-                "severity":    "high" if latest > avg * 5 else "medium",
-                "category":    category,
+                "amount": t_amount,
+                "category": category,
+                "avg": mean,
+                "zScore": z,
+                "rank": rank,
+                "description": description,
+                "severity": severity
             })
 
     return anomalies

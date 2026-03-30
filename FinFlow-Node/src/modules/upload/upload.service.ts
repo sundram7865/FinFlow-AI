@@ -4,6 +4,7 @@ import { parsePdfStatement } from '../../utils/python.bridge'
 import { bulkInsertTransactions } from '../transactions/transactions.service'
 import { AppError } from '../../middleware/error.middleware'
 import { CreateTransactionInput } from '../transactions/transactions.validator'
+import { detectAndSaveAnomalies } from '../anomalies/anomalies.service'
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -69,7 +70,8 @@ const processPdfAsync = async (
 
     // Bulk insert parsed transactions into PostgreSQL
     await bulkInsertTransactions(userId, transactions as CreateTransactionInput[])
-
+    const result = await detectAndSaveAnomalies(userId, uploadId, transactions)
+    console.log('[Upload] anomaly result:', result)
     // Mark as done
     await prisma.upload.update({
       where: { id: uploadId },

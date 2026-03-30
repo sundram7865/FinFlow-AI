@@ -80,15 +80,7 @@ async def analyst_node(state: FinFlowState) -> dict:
         f"balance=₹{tx_summary['balance']:,.0f}"
     )
 
-    logger.info("[Analyst] Detecting anomalies...")
-    anomalies = detect_anomalies(transactions)
-    if anomalies:
-        logger.info(f"[Analyst] Found {len(anomalies)} anomalies")
-        for a in anomalies:
-            logger.info(f"[Analyst] Anomaly [{a.get('severity')}]: {a.get('description')}")
-    else:
-        logger.info("[Analyst] No anomalies detected")
-
+   
     # ── format chunks for LLM prompt ────────────────────────
     tx_str = _format_chunks_for_llm(transactions)
     logger.info(f"[Analyst] Formatted {len(transactions)} chunks for LLM context")
@@ -106,5 +98,5 @@ async def analyst_node(state: FinFlowState) -> dict:
 
     return {
         "analyst_output": response.content,
-        "anomalies":      anomalies,
+    
     }

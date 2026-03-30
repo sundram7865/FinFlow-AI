@@ -3,7 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
-
+import anomalyRoutes from './modules/anomalies/anomalies.routes'
 import authRoutes        from './modules/auth/auth.routes'
 import transactionRoutes from './modules/transactions/transactions.routes'
 import goalRoutes        from './modules/goals/goals.routes'
@@ -36,7 +36,7 @@ const authLimiter = rateLimit({
   message:  { success: false, message: 'Too many auth attempts, please try again later.' },
 })
 
-app.use(globalLimiter)
+//app.use(globalLimiter)
 
 // ─── BODY PARSING ─────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ app.get('/health', (_req, res) => {
 })
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-
+app.use('/api/anomalies', anomalyRoutes)
 app.use('/api/auth',         authLimiter, authRoutes)
 app.use('/api/transactions', transactionRoutes)
 app.use('/api/goals',        goalRoutes)

@@ -1,45 +1,95 @@
-import { useEffect } from 'react'
 import { useChatStore } from '@/store/chat.store'
 import { chatService } from '@/services/chat.service'
 import ChatSidebar from '@/components/chat/ChatSidebar'
-import ChatWindow  from '@/components/chat/ChatWindow'
-import ChatInput   from '@/components/chat/ChatInput'
-import type { Anomaly, AgentMemory, ChatMessage } from '@/types/chat.types'
+import ChatWindow from '@/components/chat/ChatWindow'
+import ChatInput from '@/components/chat/ChatInput'
+import type { ChatMessage, Anomaly, AgentMemory } from '@/types/chat.types'
 
 export default function ChatPage() {
-  const { addMessage, updateLastMessage, setStreaming, isStreaming, setAnomalies, addMemories } = useChatStore()
-
-  useEffect(() => {
-    chatService.getHistory().then(res => {
-      const history = res.data.data ?? []
-      history.forEach(msg => addMessage(msg))
-    }).catch(() => {})
-  }, [])
+  const {
+    activeChatId, setActiveChatId,
+    addMessage, updateLastMessage,
+    setStreaming, isStreaming,
+    setAnomalies, addMemories,
+    addChat,
+  } = useChatStore()
 
   const handleSend = async (text: string) => {
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: new Date().toISOString() }
+    const currentChatId = activeChatId
+
+    // Optimistic user message
+    const userMsg: ChatMessage = {
+      messageId: Date.now().toString(),
+      chatId:    currentChatId ?? 'pending',
+      role:      'user',
+      content:   text,
+      timestamp: new Date().toISOString(),
+    }
     addMessage(userMsg)
     setStreaming(true)
 
-    const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: '', timestamp: new Date().toISOString() }
+    // Placeholder AI message
+    const aiMsg: ChatMessage = {
+      messageId: (Date.now() + 1).toString(),
+      chatId:    currentChatId ?? 'pending',
+      role:      'assistant',
+      content:   '',
+      timestamp: new Date().toISOString(),
+    }
     addMessage(aiMsg)
 
-    let accumulated = ''
+    // ── Accumulate lines into proper markdown ─────────────
+    // Each token from the stream is ONE line of the response.
+    // We must join them with \n so ReactMarkdown can parse
+    // headings (##), bullets (-), blank lines, etc. correctly.
+    const lines: string[] = []
 
-    await chatService.streamChat(
-      text,
-      (token) => {
-        accumulated += token
-        // Strip [META] from visible content
-        const visible = accumulated.split('\n[META]')[0]
-        updateLastMessage(visible)
-      },
-      (anomalies: Anomaly[], newMemories: AgentMemory[]) => {
-        setAnomalies(anomalies)
-        addMemories(newMemories)
-      },
-      () => setStreaming(false)
-    )
+    try {
+      await chatService.streamChat(
+        text,
+        currentChatId,
+
+        // New chat created
+        (newChatId: string) => {
+          if (!currentChatId) {
+            setActiveChatId(newChatId)
+            addChat({
+              chatId:    newChatId,
+              userId:    '',
+              title:     text.slice(0, 50),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })
+          }
+        },
+
+        // Each streaming token = one line from the response
+        (token: string) => {
+          // Skip any residual [META] bleed-through
+          if (token.startsWith('[META]')) return
+
+          lines.push(token)
+
+          // Join with newline — this is what ReactMarkdown needs
+          updateLastMessage(lines.join('\n'))
+        },
+
+        // Metadata
+        (anomalies: Anomaly[], memories: AgentMemory[]) => {
+          setAnomalies(anomalies)
+          addMemories(memories)
+        },
+
+        // Done
+        () => {
+          setStreaming(false)
+        },
+      )
+    } catch (error) {
+      console.error('Streaming error:', error)
+      updateLastMessage('Sorry, something went wrong. Please try again.')
+      setStreaming(false)
+    }
   }
 
   return (

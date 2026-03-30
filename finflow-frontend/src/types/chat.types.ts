@@ -1,11 +1,20 @@
 export type AgentType = 'analyst' | 'advisor' | 'planner' | 'general'
 
+export interface IChat {
+  chatId:    string
+  userId:    string
+  title:     string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ChatMessage {
-  id:        string
-  role:      'user' | 'assistant'
-  content:   string
+  messageId:  string
+  chatId:     string
+  role:       'user' | 'assistant'
+  content:    string
   agentUsed?: AgentType
-  timestamp: string
+  timestamp:  string
 }
 
 export interface Anomaly {

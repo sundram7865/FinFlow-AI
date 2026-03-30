@@ -4,11 +4,11 @@ import { v4 as uuidv4 } from 'uuid'
 import { streamAgentResponse } from '../../utils/python.bridge'
 import { Chat }    from './models/Chat.model'
 import { Message } from './models/Message.model'
-import { Anomaly } from './models/Anomaly.model'
+
 import { sendSuccess, sendError } from '../../utils/apiResponse'
 import { authenticate } from '../../middleware/auth.middleware'
 import { AuthRequest } from '../../types'
-import redis from '../../config/redis'
+
 
 const router = Router()
 router.use(authenticate)
@@ -16,7 +16,7 @@ router.use(authenticate)
 const chatSchema = z.object({
   body: z.object({
     message: z.string().min(1).max(2000),
-    chatId:  z.string().optional(),
+    chatId: z.string().nullable().optional() ,
   }),
 })
 
@@ -24,6 +24,7 @@ const chatSchema = z.object({
 
 router.post('/chat', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log('Received chat request:', { body: req.body, userId: req.user!.userId })
     const { body }  = chatSchema.parse({ body: req.body })
     const userId    = req.user!.userId
     let   chatId    = body.chatId
@@ -33,11 +34,12 @@ router.post('/chat', async (req: AuthRequest, res: Response, next: NextFunction)
       chatId = uuidv4()
       await Chat.create({ chatId, userId, title: 'New Chat' })
     }
-
+    console.log('Using chatId:', chatId)
     // Send chatId back in header so frontend knows which chat this belongs to
     res.setHeader('X-Chat-Id', chatId)
-
+    console.log('Starting to stream agent response...')
     await streamAgentResponse(userId, chatId, body.message, res)
+    console.log('Finished streaming agent response')
   } catch (err) { next(err) }
 })
 
@@ -94,26 +96,6 @@ router.delete('/chats/:chatId', async (req: AuthRequest, res: Response, next: Ne
 
 // ─── GET /api/ai/anomalies ────────────────────────────────────────────────────
 
-router.get('/anomalies', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const anomalies = await Anomaly.find({ userId: req.user!.userId })
-      .sort({ detectedAt: -1 })
-      .limit(20)
-      .lean()
-    sendSuccess(res, 'Anomalies fetched', anomalies)
-  } catch (err) { next(err) }
-})
 
-// ─── PATCH /api/ai/anomalies/:id/seen ─────────────────────────────────────────
-
-router.patch('/anomalies/:id/seen', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await Anomaly.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user!.userId },
-      { $set: { seen: true } }
-    )
-    sendSuccess(res, 'Anomaly marked as seen')
-  } catch (err) { next(err) }
-})
 
 export default router

@@ -24,7 +24,7 @@ export default function ChatWindow() {
           </p>
         </div>
       )}
-      {messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+      {messages.map(msg => <ChatMessage key={msg.messageId} message={msg} />)}
       {isStreaming && (
         <div className="flex gap-3">
           <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold flex-shrink-0">AI</div>
