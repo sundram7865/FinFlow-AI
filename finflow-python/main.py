@@ -12,7 +12,14 @@ from app.features.chat.router      import router as chat_router
 from app.features.pdf_parse.router import router as parse_router
 from app.features.report.router    import router as report_router
 
+import os
 
+port = int(os.environ.get("PORT", 10000))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()

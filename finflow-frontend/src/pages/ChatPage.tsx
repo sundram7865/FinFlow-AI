@@ -3,14 +3,14 @@ import { chatService } from '@/services/chat.service'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import ChatWindow from '@/components/chat/ChatWindow'
 import ChatInput from '@/components/chat/ChatInput'
-import type { ChatMessage, Anomaly, AgentMemory } from '@/types/chat.types'
+import type { ChatMessage, AgentMemory } from '@/types/chat.types'
 
 export default function ChatPage() {
   const {
     activeChatId, setActiveChatId,
     addMessage, updateLastMessage,
     setStreaming, isStreaming,
-    setAnomalies, addMemories,
+     addMemories,
     addChat,
   } = useChatStore()
 
@@ -75,10 +75,9 @@ export default function ChatPage() {
         },
 
         // Metadata
-        (anomalies: Anomaly[], memories: AgentMemory[]) => {
-          setAnomalies(anomalies)
-          addMemories(memories)
-        },
+        (memories: AgentMemory[]) => {
+  addMemories(memories)
+},
 
         // Done
         () => {
